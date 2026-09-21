@@ -60,6 +60,22 @@
   .results-card { background: #ffffff !important; }
   .card-body { background: #ffffff !important; }
 
+  /* ── Bloqueio total do dark mode no Android/iOS ── */
+  @media (prefers-color-scheme: dark) {
+    html, body { background: #F2F2F2 !important; color: #0D0D0D !important; }
+    * { background-color: revert; color: revert; }
+    html { background-color: #F2F2F2 !important; }
+    body { background-color: #F2F2F2 !important; color: #0D0D0D !important; }
+    .card, .results-card, .card-body, tbody tr { background: #ffffff !important; color: #0D0D0D !important; }
+    .hist-item, thead th { background: #F2F2F2 !important; color: #0D0D0D !important; }
+    input, select, textarea { background: #f8f9fc !important; color: #0D0D0D !important; border-color: #ccd0e0 !important; }
+    .tipo-btn { background: #ffffff !important; color: #0B368C !important; }
+    .tipo-btn.active { background: #0B368C !important; color: #ffffff !important; }
+    label, span, p, h1, h2, h3, h4, td, th, div { color: #0D0D0D !important; }
+    .section-title, .form-label { color: #4a5568 !important; }
+    .btn-action { background: #0B368C !important; color: #ffffff !important; }
+  }
+
   /* HEADER */
   header {
     background: linear-gradient(135deg, #0B368C 0%, #23468C 100%);
