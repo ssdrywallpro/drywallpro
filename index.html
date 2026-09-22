@@ -61,20 +61,7 @@
   .card-body { background: #ffffff !important; }
 
   /* ── Bloqueio total do dark mode no Android/iOS ── */
-  @media (prefers-color-scheme: dark) {
-    html, body { background: #F2F2F2 !important; color: #0D0D0D !important; }
-    * { background-color: revert; color: revert; }
-    html { background-color: #F2F2F2 !important; }
-    body { background-color: #F2F2F2 !important; color: #0D0D0D !important; }
-    .card, .results-card, .card-body, tbody tr { background: #ffffff !important; color: #0D0D0D !important; }
-    .hist-item, thead th { background: #F2F2F2 !important; color: #0D0D0D !important; }
-    input, select, textarea { background: #f8f9fc !important; color: #0D0D0D !important; border-color: #ccd0e0 !important; }
-    .tipo-btn { background: #ffffff !important; color: #0B368C !important; }
-    .tipo-btn.active { background: #0B368C !important; color: #ffffff !important; }
-    label, span, p, h1, h2, h3, h4, td, th, div { color: #0D0D0D !important; }
-    .section-title, .form-label { color: #4a5568 !important; }
-    .btn-action { background: #0B368C !important; color: #ffffff !important; }
-  }
+  /* color-scheme: light only (meta + :root + *) já impede dark mode — bloco @media dark removido */
 
   /* HEADER */
   header {
@@ -1309,7 +1296,7 @@ function calcEstruturado() {
     {icon:'🔗',nome:'União para Perfil F530',qty:uniaoF530,unit:'unid.'},
     {icon:'🔧',nome:'Suporte nivelador (regulador)',qty:suportes,unit:'unid.'},
     {icon:'🔩',nome:'Parafuso GN25 — cx 1000 un.',qty:parafusoGN25,unit:'caixa(s)'},
-    {icon:'🌀',nome:'Arame 18 (rolo 30m — 1kg)',qty:arame,unit:'rolo(s)'},
+    {icon:'🌀',nome:'Arame 10 (rolo 5kg)',qty:arame,unit:'rolo(s)'},
     {icon:'🏺',nome:'Gesso em pó (saco 40kg)',qty:gesso,unit:'saco(s)',key:'gesso'},
     {icon:'🪣',nome:'Massa de junteamento (balde 25kg)',qty:massa,unit:'balde(s)',key:'massa'},
     {icon:'📏',nome:'Fita para junta (rolo 90m)',qty:fita,unit:'rolo(s)',key:'fita'},
@@ -1692,6 +1679,25 @@ function copiarLista(){
 }
 
 var HIST_KEY = 'ss-gesso-hist';
+var HIDE_PRECOS_KEY = 'ss-hide-precos';
+
+function getHidePrecos(id) {
+  try { return !!(JSON.parse(localStorage.getItem(HIDE_PRECOS_KEY)||'{}')[id]); } catch(e){ return false; }
+}
+function setHidePrecos(id, hide) {
+  try {
+    var m = JSON.parse(localStorage.getItem(HIDE_PRECOS_KEY)||'{}');
+    if (hide) m[id]=true; else delete m[id];
+    localStorage.setItem(HIDE_PRECOS_KEY, JSON.stringify(m));
+  } catch(e){}
+}
+function togglePrecosHist(id) {
+  setHidePrecos(id, !getHidePrecos(id));
+  renderHistorico();
+  // Reabre o detalhe se estava aberto
+  var detail = document.getElementById('hist-detail-'+id);
+  if (detail) detail.style.display = 'block';
+}
 
 // ── Google Sheets integration ──────────────────────────────
 // Cole aqui a URL do Apps Script após implantar (drywallpro-sheets.gs)
@@ -1872,32 +1878,47 @@ function renderHistorico() {
     card.style.display = 'block';
     body.innerHTML = hist.map(function(e) {
       var infoTxt = e.info.map(function(i){ return '<span class="hist-info-item">'+i.label+': <b>'+i.value+'</b></span>'; }).join('');
+      var hideP    = getHidePrecos(e.id);
       var hasPrice = e.materiais.some(function(m){ return m.price; });
-      var thPrice = hasPrice ? '<th style="padding:5px 8px;text-align:center;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);">PREÇO UN.</th>'+
-        '<th style="padding:5px 8px;text-align:center;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);">DESC.</th>'+
-        '<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);">SUBTOTAL</th>' : '';
+      var showSub  = hasPrice;
+      var showUnit = hasPrice && !hideP;
+      // Cabeçalho da tabela
+      var thPrice = '';
+      if (showUnit) thPrice += '<th style="padding:5px 8px;text-align:center;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);">PREÇO UN.</th>'
+        +'<th style="padding:5px 8px;text-align:center;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);">DESC.</th>';
+      if (showSub)  thPrice += '<th style="padding:5px 8px;text-align:right;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);">SUBTOTAL</th>';
       var matRows = e.materiais.map(function(m){
-        var prCols = hasPrice ?
-          '<td style="padding:5px 8px;text-align:center;">'+( m.price||'—')+'</td>'+
-          '<td style="padding:5px 8px;text-align:center;color:#f59e0b;">'+( m.disc||'—')+'</td>'+
-          '<td style="padding:5px 8px;text-align:right;font-weight:700;">'+( m.sub||'—')+'</td>' : '';
-        return '<tr style="border-bottom:1px solid var(--border);"><td style="padding:5px 8px;">'+m.nome+'</td>'+
-               '<td style="padding:5px 8px;text-align:center;font-weight:700;">'+m.qty+'</td>'+
-               '<td style="padding:5px 8px;color:var(--text-muted);">'+m.unit+'</td>'+prCols+'</tr>';
+        var prCols = '';
+        if (showUnit) prCols += '<td style="padding:5px 8px;text-align:center;">'+(m.price||'—')+'</td>'
+          +'<td style="padding:5px 8px;text-align:center;color:#f59e0b;">'+(m.disc||'—')+'</td>';
+        if (showSub)  prCols += '<td style="padding:5px 8px;text-align:right;font-weight:700;">'+(m.sub||'—')+'</td>';
+        return '<tr style="border-bottom:1px solid var(--border);"><td style="padding:5px 8px;">'+m.nome+'</td>'
+          +'<td style="padding:5px 8px;text-align:center;font-weight:700;">'+m.qty+'</td>'
+          +'<td style="padding:5px 8px;color:var(--text-muted);">'+m.unit+'</td>'+prCols+'</tr>';
       }).join('');
-      var totalRow = (hasPrice && e.total) ?
-        '<tr><td colspan="'+(hasPrice?'5':'2')+'" style="padding:8px;text-align:right;font-weight:700;border-top:2px solid var(--border);">TOTAL</td>'+
-        '<td style="padding:8px;text-align:right;font-weight:800;color:var(--primary);border-top:2px solid var(--border);">'+e.total+'</td></tr>' : '';
+      var colspanH = showUnit ? 5 : (showSub ? 3 : 2);
+      var totalRow = (showSub && e.total)
+        ? '<tr><td colspan="'+colspanH+'" style="padding:8px;text-align:right;font-weight:700;border-top:2px solid var(--border);">TOTAL</td>'
+          +'<td style="padding:8px;text-align:right;font-weight:800;color:var(--primary);border-top:2px solid var(--border);">'+e.total+'</td></tr>' : '';
+      // Total sempre visível (subtotal nunca é ocultado)
       var totalBadge = (e.total && e.total !== 'R$ 0,00') ? ' &nbsp;<span style="font-size:11px;font-weight:700;color:var(--primary);">'+e.total+'</span>' : '';
+      // Badge de aviso quando preço unitário ocultado
+      var precoBadge = hideP ? ' &nbsp;<span style="font-size:10px;font-weight:600;color:#e65100;background:#fff3e0;padding:2px 6px;border-radius:4px;border:1px solid #ffb74d;">&#x1F512; Preço un. oculto</span>' : '';
+      // Botão toggle: aparece somente se há preços armazenados neste orçamento
+      var btnToggle = hasPrice
+        ? '<button class="btn-hist" onclick="togglePrecosHist('+e.id+')" title="'+(hideP?'Mostrar preço unitário no PDF':'Ocultar preço unitário do PDF')+'" style="'+(hideP?'color:#e65100;border-color:#e65100;':'')+'">'+
+            (hideP ? '&#x1F513; Preço un.' : '&#x1F512; Preço un.')+'</button>'
+        : '';
       return '<div class="hist-item">'+
         '<div class="hist-meta">'+
           (e.cliente ? '<div class="hist-cliente">&#x1F464; '+e.cliente+'</div>' : '')+
           '<div class="hist-date">&#x1F550; '+e.data+'</div>'+
-          '<div class="hist-tipo">'+e.titulo+totalBadge+'</div>'+
+          '<div class="hist-tipo">'+e.titulo+totalBadge+precoBadge+'</div>'+
           '<div class="hist-info">'+infoTxt+'</div>'+
         '</div>'+
         '<div class="hist-actions">'+
           '<button class="btn-hist" onclick="toggleHistDetail('+e.id+',this)">&#x1F441; Ver</button>'+
+          btnToggle+
           '<button class="btn-hist" onclick="imprimirHistorico('+e.id+')">&#x1F5A8; Imprimir</button>'+
           '<button class="btn-hist" onclick="copiarHistorico('+e.id+')">&#x1F4CB; Copiar</button>'+
           '<button class="btn-hist btn-hist-wpp" onclick="compartilharWhatsApp('+e.id+')" title="Compartilhar no WhatsApp">&#x1F4F2; WhatsApp</button>'+
@@ -1937,90 +1958,94 @@ function imprimirAtual() {
   }, 120);
 }
 
+// ── Template compartilhado: impressão e PDF WhatsApp usam o mesmo HTML ──────
+function _gerarBodyOrcamento(entry, hidePrecos) {
+  var hasP     = entry.materiais.some(function(m){ return m.price; });
+  var showSub  = hasP;                    // subtotal SEMPRE visível quando há preços
+  var showUnit = hasP && !hidePrecos;     // preço un. e desconto: ocultáveis
+  var infoTxt = entry.info.map(function(i){
+    return '<span style="margin-right:14px;"><span style="color:#888;font-size:11px;">'+i.label+':</span> <strong>'+i.value+'</strong></span>';
+  }).join('');
+  var rows = entry.materiais.map(function(m, idx){
+    var bg = idx%2===0 ? '#fff' : '#f9fafb';
+    var pCols = '';
+    if (showUnit) pCols += '<td style="padding:5px 8px;text-align:center;">'+(m.price||'—')+'</td>'
+      +'<td style="padding:5px 8px;text-align:center;color:#d97706;">'+(m.disc||'—')+'</td>';
+    if (showSub)  pCols += '<td style="padding:5px 8px;text-align:right;font-weight:700;">'+(m.sub||'—')+'</td>';
+    return '<tr style="background:'+bg+';border-bottom:1px solid #eee;">'
+      +'<td style="padding:5px 8px;">'+(idx+1)+'. '+m.nome+'</td>'
+      +'<td style="padding:5px 8px;text-align:center;font-weight:700;">'+m.qty+'</td>'
+      +'<td style="padding:5px 8px;color:#666;">'+m.unit+'</td>'
+      +pCols+'</tr>';
+  }).join('');
+  // colspan: 5 colunas (mat+qty+unit+preço+desc) quando unit visível; 3 quando só subtotal
+  var colspan = showUnit ? 5 : (showSub ? 3 : 2);
+  var totalRow = (showSub && entry.total && entry.total !== 'R$ 0,00')
+    ? '<tr style="background:#f0f4ff;"><td colspan="'+colspan+'" style="padding:8px;text-align:right;font-weight:700;border-top:2px solid #1a3a5c;">TOTAL</td>'
+      +'<td style="padding:8px;text-align:right;font-weight:800;font-size:15px;color:#1a3a5c;border-top:2px solid #1a3a5c;">'+entry.total+'</td></tr>'
+    : '';
+  var prHead = '';
+  if (showUnit) prHead += '<th style="text-align:center;width:80px;">Preço Un.</th>'
+    +'<th style="text-align:center;width:60px;">Desc.</th>';
+  if (showSub)  prHead += '<th style="text-align:right;width:90px;">Subtotal</th>';
+  return '<div class="header">'
+    +'<div class="header-logo">'
+    +'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">'
+    +'<rect x="4" y="4" width="32" height="32" rx="5" fill="none" stroke="#fff" stroke-width="2.5"/>'
+    +'<text x="20" y="26" text-anchor="middle" font-size="16" font-weight="900" fill="#fff" font-family="Arial">SS</text>'
+    +'</svg></div>'
+    +'<div class="header-text"><h1>SS DISTRIBUIDORA DE GESSO</h1>'
+    +'<p>App. DrywallPro &nbsp;|&nbsp; Orçamento de Materiais</p></div>'
+    +'</div>'
+    +'<div class="meta">'
+    +(entry.cliente ? '<div style="font-size:15px;font-weight:800;color:#1a3a5c;margin-bottom:2px;">&#x1F464; '+entry.cliente+'</div>' : '')
+    +'<div class="meta-tipo">'+entry.titulo+'</div>'
+    +'<div class="meta-data">&#x1F550; '+entry.data+'</div>'
+    +'<div class="meta-info">'+infoTxt+'</div>'
+    +'</div>'
+    +'<table>'
+    +'<thead><tr>'
+    +'<th>Material</th>'
+    +'<th style="text-align:center;width:45px;">Qtd.</th>'
+    +'<th style="width:60px;">Unid.</th>'
+    +prHead
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +(totalRow ? '<tfoot>'+totalRow+'</tfoot>' : '')
+    +'</table>'
+    +'<div class="footer">SS Distribuidora de Gesso &nbsp;|&nbsp; DrywallPro &nbsp;|&nbsp; Gerado em '+entry.data+'</div>';
+}
+
+var _CSS_ORCAMENTO =
+  '*{box-sizing:border-box;}'
+  +'body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0;padding:0;}'
+  +'.header{display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:3px solid #1a3a5c;margin-bottom:10px;}'
+  +'.header-logo{width:44px;height:44px;background:#1a3a5c;border-radius:8px;display:flex;align-items:center;justify-content:center;}'
+  +'.header-text h1{margin:0;font-size:16px;color:#1a3a5c;font-weight:800;letter-spacing:.3px;}'
+  +'.header-text p{margin:0;font-size:10px;color:#666;}'
+  +'.meta{margin-bottom:8px;}'
+  +'.meta-tipo{font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:3px;}'
+  +'.meta-data{font-size:10px;color:#888;margin-bottom:6px;}'
+  +'.meta-info{font-size:11px;padding:6px 8px;background:#f0f4ff;border-radius:5px;border-left:3px solid #1a3a5c;}'
+  +'table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}'
+  +'thead th{background:#1a3a5c;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;}'
+  +'tfoot td{font-size:12px;}'
+  +'.footer{margin-top:12px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:6px;}'
+  +'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}';
+// ────────────────────────────────────────────────────────────────────────────
+
 function imprimirHistorico(id) {
   try {
     var hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
     var entry = hist.find(function(e){ return e.id===id; });
     if (!entry) return;
 
-    var hasP = entry.materiais.some(function(m){ return m.price; });
-
-    // Info linha compacta
-    var infoTxt = entry.info.map(function(i){
-      return '<span style="margin-right:14px;"><span style="color:#888;font-size:11px;">'+i.label+':</span> <strong>'+i.value+'</strong></span>';
-    }).join('');
-
-    // Linhas da tabela
-    var rows = entry.materiais.map(function(m, idx){
-      var bg = idx%2===0 ? '#fff' : '#f9fafb';
-      var pCols = hasP
-        ? '<td style="padding:5px 8px;text-align:center;">'+(m.price||'—')+'</td>'
-        + '<td style="padding:5px 8px;text-align:center;color:#d97706;">'+(m.disc||'—')+'</td>'
-        + '<td style="padding:5px 8px;text-align:right;font-weight:700;">'+(m.sub||'—')+'</td>'
-        : '';
-      return '<tr style="background:'+bg+';border-bottom:1px solid #eee;">'
-        + '<td style="padding:5px 8px;">'+(idx+1)+'. '+m.nome+'</td>'
-        + '<td style="padding:5px 8px;text-align:center;font-weight:700;">'+m.qty+'</td>'
-        + '<td style="padding:5px 8px;color:#666;">'+m.unit+'</td>'
-        + pCols+'</tr>';
-    }).join('');
-
-    var totalRow = (hasP && entry.total && entry.total !== 'R$ 0,00')
-      ? '<tr style="background:#f0f4ff;"><td colspan="'+(hasP?5:2)+'" style="padding:8px;text-align:right;font-weight:700;border-top:2px solid #1a3a5c;">TOTAL</td>'
-        + '<td style="padding:8px;text-align:right;font-weight:800;font-size:15px;color:#1a3a5c;border-top:2px solid #1a3a5c;">'+entry.total+'</td></tr>'
-      : '';
-
-    var prHead = hasP
-      ? '<th style="text-align:center;width:80px;">Preço Un.</th>'
-        + '<th style="text-align:center;width:60px;">Desc.</th>'
-        + '<th style="text-align:right;width:90px;">Subtotal</th>'
-      : '';
-
     var html =
       '<!DOCTYPE html><html><head><meta charset="UTF-8">'
       +'<title>Orçamento — '+entry.titulo+'</title>'
-      +'<style>'
-      +'@page{size:A4;margin:15mm 12mm;}'
-      +'*{box-sizing:border-box;}'
-      +'body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0;padding:0;}'
-      +'.header{display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:3px solid #1a3a5c;margin-bottom:10px;}'
-      +'.header-logo{width:44px;height:44px;background:#1a3a5c;border-radius:8px;display:flex;align-items:center;justify-content:center;}'
-      +'.header-text h1{margin:0;font-size:16px;color:#1a3a5c;font-weight:800;letter-spacing:.3px;}'
-      +'.header-text p{margin:0;font-size:10px;color:#666;}'
-      +'.meta{margin-bottom:8px;}'
-      +'.meta-tipo{font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:3px;}'
-      +'.meta-data{font-size:10px;color:#888;margin-bottom:6px;}'
-      +'.meta-info{font-size:11px;padding:6px 8px;background:#f0f4ff;border-radius:5px;border-left:3px solid #1a3a5c;}'
-      +'table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}'
-      +'thead th{background:#1a3a5c;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;}'
-      +'tfoot td{font-size:12px;}'
-      +'.footer{margin-top:12px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:6px;}'
-      +'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
-      +'</style></head><body>'
-      +'<div class="header">'
-      +'<div class="header-logo">'
-      +'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="32" height="32" rx="5" fill="none" stroke="#fff" stroke-width="2.5"/>'
-      +'<text x="20" y="26" text-anchor="middle" font-size="16" font-weight="900" fill="#fff" font-family="Arial">SS</text></svg>'
-      +'</div>'
-      +'<div class="header-text"><h1>SS DISTRIBUIDORA DE GESSO</h1><p>App. DrywallPro &nbsp;|&nbsp; Orçamento de Materiais</p></div>'
-      +'</div>'
-      +'<div class="meta">'
-      +(entry.cliente ? '<div style="font-size:15px;font-weight:800;color:#1a3a5c;margin-bottom:2px;">&#x1F464; '+entry.cliente+'</div>' : '')
-      +'<div class="meta-tipo">'+entry.titulo+'</div>'
-      +'<div class="meta-data">&#x1F550; '+entry.data+'</div>'
-      +'<div class="meta-info">'+infoTxt+'</div>'
-      +'</div>'
-      +'<table>'
-      +'<thead><tr>'
-      +'<th>Material</th>'
-      +'<th style="text-align:center;width:45px;">Qtd.</th>'
-      +'<th style="width:60px;">Unid.</th>'
-      +prHead
-      +'</tr></thead>'
-      +'<tbody>'+rows+'</tbody>'
-      +(totalRow ? '<tfoot>'+totalRow+'</tfoot>' : '')
-      +'</table>'
-      +'<div class="footer">SS Distribuidora de Gesso &nbsp;|&nbsp; DrywallPro &nbsp;|&nbsp; Gerado em '+entry.data+'</div>'
+      +'<style>@page{size:A4;margin:15mm 12mm;}'+_CSS_ORCAMENTO+'</style>'
+      +'</head><body>'
+      +_gerarBodyOrcamento(entry, getHidePrecos(entry.id))
       +'</body></html>';
 
     // Tenta abrir nova janela; se bloqueada (popup blocker / WebView), usa iframe oculto
@@ -2076,13 +2101,20 @@ function copiarHistorico(id) {
 
 function compartilharWhatsApp(id) {
   try {
-    var hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
-    var entry = hist.find(function(e){ return e.id===id; });
+    var histData = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    var entry = histData.find(function(e){ return e.id===id; });
     if (!entry) return;
+    // Sempre gera PDF — mobile: compartilha via Share API; PC: baixa o arquivo
+    _wppPDF(entry, getHidePrecos(entry.id));
+  } catch(e) { alert('Erro ao compartilhar: '+e); }
+}
+
+function _wppTexto(entry) {
+  try {
     var t = '*SS DISTRIBUIDORA DE GESSO*\n';
-    if (entry.cliente) t += '👤 *'+entry.cliente+'*\n';
+    if (entry.cliente) t += '\u{1F464} *'+entry.cliente+'*\n';
     t += '*Orçamento — '+entry.titulo+'*\n';
-    t += '📅 '+entry.data+'\n\n';
+    t += '\u{1F550} '+entry.data+'\n\n';
     entry.info.forEach(function(i){ t += '▪ '+i.label+': *'+i.value+'*\n'; });
     t += '\n*Lista de Materiais:*\n';
     entry.materiais.forEach(function(m, idx){
@@ -2092,17 +2124,9 @@ function compartilharWhatsApp(id) {
     });
     if (entry.total && entry.total !== 'R$ 0,00') t += '\n*TOTAL: '+entry.total+'*\n';
     t += '\n_Gerado pelo App DrywallPro — SS Distribuidora de Gesso_';
-
     var url = 'https://wa.me/?text='+encodeURIComponent(t);
-
-    // Tenta abrir WhatsApp normalmente
     var abriu = false;
-    try {
-      var w = window.open(url, '_blank');
-      if (w) abriu = true;
-    } catch(e2) {}
-
-    // Fallback via link clicável (funciona em alguns WebViews)
+    try { var w = window.open(url, '_blank'); if (w) abriu = true; } catch(e2) {}
     if (!abriu) {
       try {
         var a = document.createElement('a');
@@ -2111,10 +2135,93 @@ function compartilharWhatsApp(id) {
         abriu = true;
       } catch(e3) {}
     }
-
-    // Fallback final: modal com texto para copiar
     if (!abriu) { _mostrarModalWpp(t); }
   } catch(e) { alert('Erro ao compartilhar: '+e); }
+}
+
+function _wppPDF(entry, hidePrecos) {
+  // Toast de carregamento
+  var toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a3a5c;color:#fff;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.35);white-space:nowrap;';
+  toast.textContent = '⏳ Gerando PDF...';
+  document.body.appendChild(toast);
+
+  function gerarECompartilhar() {
+    // Usa o mesmo template da impressão
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:20px 24px;';
+    container.innerHTML = '<style>'+_CSS_ORCAMENTO+'</style>' + _gerarBodyOrcamento(entry, hidePrecos);
+    document.body.appendChild(container);
+
+    html2pdf().set({
+      margin: [10, 10, 10, 10],
+      filename: 'Orcamento-DrywallPro.pdf',
+      image: { type: 'jpeg', quality: 0.96 },
+      html2canvas: { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(container).outputPdf('blob').then(function(blob) {
+      if (document.body.contains(container)) document.body.removeChild(container);
+      toast.remove();
+      var file = new File([blob], 'Orcamento-DrywallPro.pdf', { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Mobile: compartilha PDF direto pelo painel nativo
+        navigator.share({
+          files: [file],
+          title: 'Orçamento — ' + entry.titulo,
+          text: 'SS Distribuidora de Gesso — DrywallPro'
+        }).catch(function(err) {
+          if (err && err.name !== 'AbortError') { _wppBaixarPDF(blob, entry); }
+        });
+      } else {
+        // PC / desktop: baixa o PDF e abre WhatsApp Web
+        _wppBaixarPDF(blob, entry);
+      }
+    }).catch(function(err) {
+      console.warn('_wppPDF error:', err);
+      if (document.body.contains(container)) document.body.removeChild(container);
+      toast.remove();
+      _wppTexto(entry);
+    });
+  }
+
+  // Carrega html2pdf.js sob demanda (CDN)
+  if (window.html2pdf) {
+    gerarECompartilhar();
+  } else {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = gerarECompartilhar;
+    s.onerror = function() { toast.remove(); _wppTexto(entry); };
+    document.head.appendChild(s);
+  }
+}
+
+function _wppBaixarPDF(blob, entry) {
+  // Baixa o PDF automaticamente
+  var objUrl = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = objUrl;
+  a.download = 'Orcamento-DrywallPro.pdf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(objUrl); }, 8000);
+
+  // Abre WhatsApp Web com mensagem de instrução
+  var t = 'SS DISTRIBUIDORA DE GESSO\n';
+  if (entry.cliente) t += '\u{1F464} ' + entry.cliente + '\n';
+  t += 'Orçamento: ' + entry.titulo + '\n';
+  t += '\u{1F4CE} Segue o PDF com os materiais. Anexe o arquivo que foi baixado automaticamente.\n';
+  t += '\n_Gerado pelo App DrywallPro_';
+  var wurl = 'https://wa.me/?text=' + encodeURIComponent(t);
+  try {
+    var w = window.open(wurl, '_blank');
+    if (!w) throw new Error('blocked');
+  } catch(e) {
+    var lnk = document.createElement('a');
+    lnk.href = wurl; lnk.target = '_blank'; lnk.rel = 'noopener';
+    document.body.appendChild(lnk); lnk.click(); document.body.removeChild(lnk);
+  }
 }
 
 function _mostrarModalWpp(texto) {
