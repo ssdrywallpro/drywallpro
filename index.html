@@ -2184,47 +2184,53 @@ function _wppPDF(entry, hidePrecos) {
   document.body.appendChild(toast);
 
   function gerarECompartilhar() {
-    // Wrapper 0x0 fixo: invisível ao usuário, mas html2canvas captura o filho normalmente.
-    // NÃO usar windowWidth — redimensionar o viewport virtual causa coordenadas erradas.
-    // NÃO usar position:absolute com offset grande — coloca o elemento fora da área capturada.
-    // NÃO usar visibility:hidden — html2canvas não renderiza elementos ocultos.
-    var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:fixed;left:0;bottom:0;overflow:hidden;height:0;width:0;pointer-events:none;';
-    var container = document.createElement('div');
-    container.style.cssText = 'position:relative;width:794px;background:#fff;padding:20px 24px;';
-    container.innerHTML = _gerarBodyOrcamento(entry, hidePrecos);
-    wrapper.appendChild(container);
-    document.body.appendChild(wrapper);
+    // SOLUÇÃO DEFINITIVA: iframe isolado.
+    // html2canvas na janela principal captura a área errada do layout da página.
+    // No iframe o conteúdo é renderizado em ambiente limpo — igual à janela de impressão.
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:0;top:0;width:794px;height:1px;border:none;opacity:0;pointer-events:none;';
+    document.body.appendChild(iframe);
 
-    html2pdf().set({
-      margin: [10, 10, 10, 10],
-      filename: 'Orcamento-DrywallPro.pdf',
-      image: { type: 'jpeg', quality: 0.96 },
-      html2canvas: { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).from(container).outputPdf('blob').then(function(blob) {
-      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-      toast.remove();
-      var file = new File([blob], 'Orcamento-DrywallPro.pdf', { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Mobile: compartilha PDF direto pelo painel nativo
-        navigator.share({
-          files: [file],
-          title: 'Orçamento — ' + entry.titulo,
-          text: 'SS Distribuidora de Gesso — DrywallPro'
-        }).catch(function(err) {
-          if (err && err.name !== 'AbortError') { _wppBaixarPDF(blob, entry); }
-        });
-      } else {
-        // PC / desktop: baixa o PDF e abre WhatsApp Web
-        _wppBaixarPDF(blob, entry);
-      }
-    }).catch(function(err) {
-      console.warn('_wppPDF error:', err);
-      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
-      toast.remove();
-      _wppTexto(entry);
-    });
+    var iDoc = iframe.contentDocument || iframe.contentWindow.document;
+    iDoc.open();
+    iDoc.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<style>*{box-sizing:border-box;margin:0;padding:0;}body{background:#fff;font-family:Arial,sans-serif;}</style>'
+      + '</head><body>' + _gerarBodyOrcamento(entry, hidePrecos) + '</body></html>');
+    iDoc.close();
+
+    // Aguardar o iframe renderizar e ajustar altura real
+    setTimeout(function() {
+      var iBody = iDoc.body;
+      iframe.style.height = (iBody.scrollHeight + 40) + 'px';
+
+      html2pdf().set({
+        margin: [10, 10, 10, 10],
+        filename: 'Orcamento-DrywallPro.pdf',
+        image: { type: 'jpeg', quality: 0.96 },
+        html2canvas: { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      }).from(iBody).outputPdf('blob').then(function(blob) {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+        toast.remove();
+        var file = new File([blob], 'Orcamento-DrywallPro.pdf', { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({
+            files: [file],
+            title: 'Orçamento — ' + entry.titulo,
+            text: 'SS Distribuidora de Gesso — DrywallPro'
+          }).catch(function(err) {
+            if (err && err.name !== 'AbortError') { _wppBaixarPDF(blob, entry); }
+          });
+        } else {
+          _wppBaixarPDF(blob, entry);
+        }
+      }).catch(function(err) {
+        console.warn('_wppPDF error:', err);
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+        toast.remove();
+        _wppTexto(entry);
+      });
+    }, 400);
   }
 
   // Carrega html2pdf.js sob demanda (CDN)
