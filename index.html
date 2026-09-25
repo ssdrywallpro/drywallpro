@@ -686,6 +686,11 @@
     #results-card tbody tr.extra-row td:nth-child(2) { padding: 0; }
   }
 </style>
+<!-- Pré-carrega jsPDF + autotable no load da página (não sob demanda) para que o clique em
+     "Compartilhar" chame navigator.share() de forma síncrona, sem perder o gesto do usuário
+     (mobile invalida o compartilhamento de arquivo se houver espera de rede pelo meio). -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body style="background-color:#F2F2F2!important;color:#0D0D0D!important;">
 
