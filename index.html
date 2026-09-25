@@ -2183,66 +2183,255 @@ function _wppPDF(entry, hidePrecos) {
   toast.textContent = '⏳ Gerando PDF...';
   document.body.appendChild(toast);
 
-  function gerarECompartilhar() {
-    // SOLUÇÃO DEFINITIVA: iframe isolado.
-    // html2canvas na janela principal captura a área errada do layout da página.
-    // No iframe o conteúdo é renderizado em ambiente limpo — igual à janela de impressão.
-    var iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;left:0;top:0;width:794px;height:1px;border:none;opacity:0;pointer-events:none;';
-    document.body.appendChild(iframe);
-
-    var iDoc = iframe.contentDocument || iframe.contentWindow.document;
-    iDoc.open();
-    iDoc.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
-      + '<style>*{box-sizing:border-box;margin:0;padding:0;}body{background:#fff;font-family:Arial,sans-serif;}</style>'
-      + '</head><body>' + _gerarBodyOrcamento(entry, hidePrecos) + '</body></html>');
-    iDoc.close();
-
-    // Aguardar o iframe renderizar e ajustar altura real
-    setTimeout(function() {
-      var iBody = iDoc.body;
-      iframe.style.height = (iBody.scrollHeight + 40) + 'px';
-
-      html2pdf().set({
-        margin: [10, 10, 10, 10],
-        filename: 'Orcamento-DrywallPro.pdf',
-        image: { type: 'jpeg', quality: 0.96 },
-        html2canvas: { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(iBody).outputPdf('blob').then(function(blob) {
-        if (document.body.contains(iframe)) document.body.removeChild(iframe);
-        toast.remove();
-        var file = new File([blob], 'Orcamento-DrywallPro.pdf', { type: 'application/pdf' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({
-            files: [file],
-            title: 'Orçamento — ' + entry.titulo,
-            text: 'SS Distribuidora de Gesso — DrywallPro'
-          }).catch(function(err) {
-            if (err && err.name !== 'AbortError') { _wppBaixarPDF(blob, entry); }
-          });
-        } else {
-          _wppBaixarPDF(blob, entry);
-        }
-      }).catch(function(err) {
-        console.warn('_wppPDF error:', err);
-        if (document.body.contains(iframe)) document.body.removeChild(iframe);
-        toast.remove();
-        _wppTexto(entry);
-      });
-    }, 400);
+  var finalizado = false;
+  function falhar(err) {
+    if (finalizado) return;
+    finalizado = true;
+    console.warn('_wppPDF error:', err);
+    if (toast.parentNode) toast.remove();
+    _wppTexto(entry);
   }
 
-  // Carrega html2pdf.js sob demanda (CDN)
-  if (window.html2pdf) {
-    gerarECompartilhar();
-  } else {
+  function gerarECompartilhar() {
+    if (finalizado) return;
+    try {
+      // PDF construído programaticamente com jsPDF (texto/linhas/tabelas).
+      // NÃO usa html2canvas nem captura de DOM — elimina o "PDF em branco".
+      var JsPDF = window.jspdf && window.jspdf.jsPDF;
+      var doc = _wppMontarPDF(JsPDF, entry, hidePrecos);
+      var blob = doc.output('blob');
+      finalizado = true;
+      if (toast.parentNode) toast.remove();
+      var file = new File([blob], 'Orcamento-DrywallPro.pdf', { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: 'Orçamento — ' + entry.titulo,
+          text: 'SS Distribuidora de Gesso — DrywallPro'
+        }).catch(function(err) {
+          if (err && err.name !== 'AbortError') { _wppBaixarPDF(blob, entry); }
+        });
+      } else {
+        _wppBaixarPDF(blob, entry);
+      }
+    } catch (err) {
+      falhar(err);
+    }
+  }
+
+  // Timeout de segurança (CDN lenta/offline)
+  setTimeout(function() { if (!finalizado) falhar(new Error('timeout ao carregar jsPDF')); }, 20000);
+
+  // Carrega jsPDF + autotable sob demanda (CDN)
+  _carregarJsPDF(gerarECompartilhar, falhar);
+}
+
+// Carrega jsPDF (UMD) e depois o plugin jspdf-autotable, em sequência
+function _carregarJsPDF(onOk, onErr) {
+  function temJsPDF()   { return !!(window.jspdf && window.jspdf.jsPDF); }
+  function temAutoTab() { return temJsPDF() && typeof window.jspdf.jsPDF.API.autoTable === 'function'; }
+  function carregar(src, cb) {
     var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    s.onload = gerarECompartilhar;
-    s.onerror = function() { toast.remove(); _wppTexto(entry); };
+    s.src = src;
+    s.onload = cb;
+    s.onerror = function() { onErr(new Error('Falha ao carregar ' + src)); };
     document.head.appendChild(s);
   }
+  var URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  var URL_AUTOT = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+  function etapaAutoTable() {
+    if (temAutoTab()) { onOk(); return; }
+    carregar(URL_AUTOT, function() {
+      if (temAutoTab()) onOk(); else onErr(new Error('jspdf-autotable não registrou'));
+    });
+  }
+  if (temJsPDF()) { etapaAutoTable(); return; }
+  carregar(URL_JSPDF, function() {
+    if (temJsPDF()) etapaAutoTable(); else onErr(new Error('jsPDF não disponível'));
+  });
+}
+
+// Normaliza texto para as fontes padrão do jsPDF (Latin-1): mantém acentos (ã, ç, é, í, ², º...),
+// troca travessões/aspas tipográficas e remove emojis/caracteres fora do Latin-1.
+function _pdfTxt(s) {
+  if (s === undefined || s === null) return '';
+  return String(s)
+    .replace(/[–—−]/g, '-')
+    .replace(/[‘’‚]/g, "'")
+    .replace(/[“”„]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/[•▪●]/g, '-')
+    .replace(/ /g, ' ')
+    .replace(/[^\u0000-ÿ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Monta o documento jsPDF do orçamento (mesmo layout de _gerarBodyOrcamento)
+function _wppMontarPDF(JsPDF, entry, hidePrecos) {
+  if (!JsPDF) throw new Error('jsPDF não carregado');
+  var AZUL = [26, 58, 92], CINZA = [102, 102, 102], CINZA2 = [136, 136, 136], TXT = [34, 34, 34];
+  var doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  if (typeof doc.autoTable !== 'function') throw new Error('jspdf-autotable não carregado');
+  try { doc.setLanguage('pt-BR'); } catch (e) {}
+  try { doc.setProperties({ title: 'Orçamento - ' + _pdfTxt(entry.titulo), author: 'SS Distribuidora de Gesso', creator: 'DrywallPro' }); } catch (e) {}
+
+  var PW = doc.internal.pageSize.getWidth();
+  var PH = doc.internal.pageSize.getHeight();
+  var M = 12, W = PW - 2 * M;
+  var y = M;
+
+  var mats = entry.materiais || [];
+  var infos = entry.info || [];
+  var hasP     = mats.some(function(m){ return m.price; });
+  var showSub  = hasP;
+  var showUnit = hasP && !hidePrecos;
+
+  // ── Cabeçalho ──
+  doc.setFillColor(AZUL[0], AZUL[1], AZUL[2]);
+  doc.roundedRect(M, y, 13, 13, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text('SS', M + 6.5, y + 6.5, { align: 'center', baseline: 'middle' });
+  doc.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+  doc.setFontSize(14);
+  doc.text('SS DISTRIBUIDORA DE GESSO', M + 17, y + 5.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(CINZA[0], CINZA[1], CINZA[2]);
+  doc.text('App DrywallPro  |  Orçamento de Materiais', M + 17, y + 10.5);
+  y += 16;
+  doc.setDrawColor(AZUL[0], AZUL[1], AZUL[2]);
+  doc.setLineWidth(0.8);
+  doc.line(M, y, PW - M, y);
+  y += 6;
+
+  // ── Meta: cliente, título, data ──
+  if (entry.cliente) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+    var cl = doc.splitTextToSize('Cliente: ' + _pdfTxt(entry.cliente), W);
+    doc.text(cl, M, y + 1);
+    y += cl.length * 5.5;
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+  var tt = doc.splitTextToSize(_pdfTxt(entry.titulo), W);
+  doc.text(tt, M, y + 1);
+  y += tt.length * 4.8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(CINZA2[0], CINZA2[1], CINZA2[2]);
+  doc.text(_pdfTxt(entry.data), M, y + 1);
+  y += 4;
+
+  // ── Linha de informações (caixa azul-clara com barra à esquerda) ──
+  if (infos.length) {
+    doc.setFontSize(9);
+    var linhas = [[]], larg = 0, maxW = W - 8, GAP = 5;
+    infos.forEach(function(i) {
+      var lab = _pdfTxt(i.label) + ': ', val = _pdfTxt(i.value);
+      doc.setFont('helvetica', 'normal'); var wl = doc.getTextWidth(lab);
+      doc.setFont('helvetica', 'bold');   var wv = doc.getTextWidth(val);
+      var wt = wl + wv;
+      if (larg > 0 && larg + wt > maxW) { linhas.push([]); larg = 0; }
+      linhas[linhas.length - 1].push({ lab: lab, val: val, wl: wl, x: larg });
+      larg += wt + GAP;
+    });
+    var LH = 4.6, boxH = linhas.length * LH + 3.4;
+    doc.setFillColor(240, 244, 255);
+    doc.rect(M, y, W, boxH, 'F');
+    doc.setFillColor(AZUL[0], AZUL[1], AZUL[2]);
+    doc.rect(M, y, 1, boxH, 'F');
+    linhas.forEach(function(ln, li) {
+      var ly = y + 2.2 + LH * li + 3.2;
+      ln.forEach(function(it) {
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(CINZA2[0], CINZA2[1], CINZA2[2]);
+        doc.text(it.lab, M + 4 + it.x, ly);
+        doc.setFont('helvetica', 'bold');   doc.setTextColor(TXT[0], TXT[1], TXT[2]);
+        doc.text(it.val, M + 4 + it.x + it.wl, ly);
+      });
+    });
+    y += boxH + 3;
+  }
+
+  // ── Tabela de materiais ──
+  var head = ['Material', 'Qtd.', 'Unid.'];
+  if (showUnit) head.push('Preço Un.', 'Desc.');
+  if (showSub)  head.push('Subtotal');
+  var body = mats.map(function(m, idx) {
+    var r = [(idx + 1) + '. ' + _pdfTxt(m.nome), _pdfTxt(m.qty), _pdfTxt(m.unit)];
+    if (showUnit) r.push(_pdfTxt(m.price) || '-', _pdfTxt(m.disc) || '-');
+    if (showSub)  r.push(_pdfTxt(m.sub) || '-');
+    return r;
+  });
+  var colStyles = {
+    0: { halign: 'left' },
+    1: { halign: 'center', fontStyle: 'bold', cellWidth: 16 },
+    2: { halign: 'left', textColor: CINZA, cellWidth: 20 }
+  };
+  var ci = 3;
+  if (showUnit) { colStyles[ci++] = { halign: 'center', cellWidth: 26 }; colStyles[ci++] = { halign: 'center', cellWidth: 18, textColor: [217, 119, 6] }; }
+  if (showSub)  { colStyles[ci++] = { halign: 'right', fontStyle: 'bold', cellWidth: 30 }; }
+
+  var foot = [];
+  if (showSub && entry.total && entry.total !== 'R$ 0,00') {
+    foot.push([
+      { content: 'TOTAL', colSpan: head.length - 1, styles: { halign: 'right', fontSize: 10.5 } },
+      { content: _pdfTxt(entry.total), styles: { halign: 'right', fontSize: 13, textColor: AZUL } }
+    ]);
+  }
+
+  doc.autoTable({
+    startY: y,
+    margin: { left: M, right: M, top: M, bottom: 16 },
+    head: [head],
+    body: body,
+    foot: foot.length ? foot : undefined,
+    showFoot: 'lastPage',
+    theme: 'plain',
+    styles: { font: 'helvetica', fontSize: 9, textColor: TXT, cellPadding: { top: 1.8, bottom: 1.8, left: 2.2, right: 2.2 }, lineColor: [238, 238, 238], lineWidth: { bottom: 0.2 }, overflow: 'linebreak', valign: 'middle' },
+    headStyles: { fillColor: AZUL, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, lineWidth: 0 },
+    bodyStyles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    footStyles: { fillColor: [240, 244, 255], textColor: TXT, fontStyle: 'bold', lineColor: AZUL, lineWidth: { top: 0.6 }, cellPadding: 2.6 },
+    columnStyles: colStyles,
+    didParseCell: function(data) {
+      if (data.section !== 'head') return;
+      var c = data.column.index;
+      data.cell.styles.textColor = [255, 255, 255];
+      data.cell.styles.fontStyle = 'bold';
+      data.cell.styles.halign = 'left';
+      if (c === 1 || (showUnit && (c === 3 || c === 4))) data.cell.styles.halign = 'center';
+      if (showSub && c === head.length - 1) data.cell.styles.halign = 'right';
+    }
+  });
+
+  // ── Rodapé ──
+  var fy = (doc.lastAutoTable && doc.lastAutoTable.finalY ? doc.lastAutoTable.finalY : y) + 8;
+  if (fy > PH - 10) { doc.addPage(); fy = M + 4; }
+  doc.setDrawColor(238, 238, 238);
+  doc.setLineWidth(0.2);
+  doc.line(M, fy - 4, PW - M, fy - 4);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(170, 170, 170);
+  doc.text('SS Distribuidora de Gesso  |  DrywallPro  |  Gerado em ' + _pdfTxt(entry.data), PW / 2, fy, { align: 'center' });
+
+  // Numeração de páginas (só quando houver mais de uma)
+  var nPag = doc.internal.getNumberOfPages();
+  if (nPag > 1) {
+    for (var p = 1; p <= nPag; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7.5);
+      doc.setTextColor(170, 170, 170);
+      doc.text('Página ' + p + ' de ' + nPag, PW - M, PH - 6, { align: 'right' });
+    }
+  }
+  return doc;
 }
 
 function _wppBaixarPDF(blob, entry) {
