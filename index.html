@@ -1811,7 +1811,7 @@ function salvarHistorico(result) {
     };
     currentHistId = entry.id;
     hist.unshift(entry);
-    if (hist.length > 30) hist = hist.slice(0, 30);
+    if (hist.length > 100) hist = hist.slice(0, 100);
     localStorage.setItem(HIST_KEY, JSON.stringify(hist));
     renderHistorico();
   } catch(e) {}
@@ -1866,7 +1866,7 @@ function salvarAgora() {
     var entry = {id:now.getTime(),data:data,titulo:currentResult.titulo,cliente:clienteVal,info:currentResult.info,total:totalVal,materiais:mats};
     currentHistId = entry.id;
     hist.unshift(entry);
-    if(hist.length>30) hist=hist.slice(0,30);
+    if(hist.length>100) hist=hist.slice(0,100);
     localStorage.setItem(HIST_KEY, JSON.stringify(hist));
     renderHistorico();
     _sheetsPost({acao:'salvar',id:String(entry.id),tipo:entry.titulo,titulo:entry.titulo,
