@@ -1795,6 +1795,8 @@ function salvarHistorico(result) {
       info: result.info,
       total: totalVal,
       materiais: result.materiais.map(function(m, i) {
+        var tr = document.getElementById('row-'+i);
+        if (tr && tr.classList.contains('row-off')) return null; // item desativado — não entra no histórico/PDF
         var qEl = document.getElementById('qty-'+i);
         var pEl = document.getElementById('price-'+i);
         var dBtn = document.getElementById('disc-btn-'+i);
@@ -1807,7 +1809,7 @@ function salvarHistorico(result) {
                 price: price>0?fmtNum(price):'',
                 disc: disc>0?disc+'%':'',
                 sub: price>0?'R$ '+fmtNum(sub):''};
-      }).concat(_coletarExtras())
+      }).filter(function(x){ return x; }).concat(_coletarExtras())
     };
     currentHistId = entry.id;
     hist.unshift(entry);
@@ -1824,6 +1826,8 @@ function salvarAgora() {
     var totalEl = document.getElementById('total-value');
     var totalVal = totalEl ? totalEl.textContent : '';
     var mats = currentResult.materiais.map(function(m, i) {
+      var tr=document.getElementById('row-'+i);
+      if (tr && tr.classList.contains('row-off')) return null; // item desativado — não entra no histórico/PDF
       var qEl=document.getElementById('qty-'+i);
       var pEl=document.getElementById('price-'+i);
       var dBtn=document.getElementById('disc-btn-'+i);
@@ -1836,7 +1840,7 @@ function salvarAgora() {
               price:price>0?_fmtN(price):'',
               disc:disc>0?disc+'%':'',
               sub:price>0?'R$ '+_fmtN(sub):''};
-    }).concat(_coletarExtras());
+    }).filter(function(x){ return x; }).concat(_coletarExtras());
     var hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
     if (currentHistId) {
       var idx = -1;
