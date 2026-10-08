@@ -2087,7 +2087,14 @@ function imprimirHistorico(id) {
     var html =
       '<!DOCTYPE html><html><head><meta charset="UTF-8">'
       +'<title>Orçamento — '+entry.titulo+'</title>'
-      +'<style>@page{size:A4;margin:15mm 12mm;}'+_CSS_ORCAMENTO+'</style>'
+      +'<meta name="viewport" content="width=device-width,initial-scale=1">'
+      +'<style>@page{size:A4 portrait;margin:12mm 10mm;}'
+      +'html,body{margin:0;padding:0;width:100%;background:#fff;}'
+      +'#_pdf-doc{width:100%;zoom:1.3;}'
+      +'#_pdf-doc table{page-break-inside:auto;}'
+      +'#_pdf-doc tr{page-break-inside:avoid;}'
+      +'#_pdf-doc thead{display:table-header-group;}'
+      +_CSS_ORCAMENTO+'</style>'
       +'</head><body>'
       +'<div id="_pdf-doc">'
       +_gerarBodyOrcamento(entry, getHidePrecos(entry.id))
@@ -2402,8 +2409,8 @@ function _wppMontarPDF(JsPDF, entry, hidePrecos) {
     foot: foot.length ? foot : undefined,
     showFoot: 'lastPage',
     theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 9, textColor: TXT, cellPadding: { top: 1.8, bottom: 1.8, left: 2.2, right: 2.2 }, lineColor: [238, 238, 238], lineWidth: { bottom: 0.2 }, overflow: 'linebreak', valign: 'middle' },
-    headStyles: { fillColor: AZUL, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, lineWidth: 0 },
+    styles: { font: 'helvetica', fontSize: 10.5, textColor: TXT, cellPadding: { top: 1.8, bottom: 1.8, left: 2.2, right: 2.2 }, lineColor: [238, 238, 238], lineWidth: { bottom: 0.2 }, overflow: 'linebreak', valign: 'middle' },
+    headStyles: { fillColor: AZUL, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9.5, lineWidth: 0 },
     bodyStyles: { fillColor: [255, 255, 255] },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     footStyles: { fillColor: [240, 244, 255], textColor: TXT, fontStyle: 'bold', lineColor: AZUL, lineWidth: { top: 0.6 }, cellPadding: 2.6 },
