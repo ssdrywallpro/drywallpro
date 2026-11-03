@@ -811,6 +811,15 @@
           </select>
         </div>
         <div class="form-group">
+          <label>Marca da placa</label>
+          <select id="p-marca" class="marca-placa" onchange="this.style.borderColor='';this.style.boxShadow='';">
+            <option value="">Selecione a marca...</option>
+            <option value="Trevo">Trevo</option>
+            <option value="Placo">Placo</option>
+            <option value="Knauf">Knauf</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Desperdício (%)</label>
           <input type="number" id="p-desp" value="10" step="1" min="0" max="30">
         </div>
@@ -858,6 +867,15 @@
       <div class="form-grid" style="margin-top:14px;">
         <div class="form-group" style="display:none"><label>Largura</label><input id="e-larg" type="number" value="0"></div>
         <div class="form-group" style="display:none"><label>Comprimento</label><input id="e-comp" type="number" value="0"></div>
+        <div class="form-group">
+          <label>Marca da placa</label>
+          <select id="e-marca" class="marca-placa" onchange="this.style.borderColor='';this.style.boxShadow='';">
+            <option value="">Selecione a marca...</option>
+            <option value="Trevo">Trevo</option>
+            <option value="Placo">Placo</option>
+            <option value="Knauf">Knauf</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>Desperdício (%)</label>
           <input type="number" id="e-desp" value="10" step="1" min="0" max="30">
@@ -918,6 +936,15 @@
         <div class="form-group" style="display:none"><label>Largura</label><input id="a-larg" type="number" value="0"></div>
         <div class="form-group" style="display:none"><label>Comprimento</label><input id="a-comp" type="number" value="0"></div>
         <div class="form-group">
+          <label>Marca da placa</label>
+          <select id="a-marca" class="marca-placa" onchange="this.style.borderColor='';this.style.boxShadow='';">
+            <option value="">Selecione a marca...</option>
+            <option value="Trevo">Trevo</option>
+            <option value="Placo">Placo</option>
+            <option value="Knauf">Knauf</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Desperdício (%)</label>
           <input type="number" id="a-desp" value="5" step="1" min="0" max="30">
         </div>
@@ -952,6 +979,22 @@
       <span id="results-title" style="opacity:0.8;font-size:13px;margin-left:6px;"></span>
     </div>
     <div class="card-body">
+      <div id="edit-banner" style="display:none;background:#fff8e1;border:1.5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-weight:700;color:#b45309;font-size:14px;" id="edit-banner-title">&#x270F;&#xFE0F; Editando orçamento salvo</div>
+        <div style="font-size:12px;color:#78716c;margin:4px 0 10px;">Altere itens, quantidades, preços ou a marca da placa. <strong>Salvar orçamento</strong> atualiza este mesmo orçamento.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <label style="font-size:12px;font-weight:600;color:#4a5568;">Marca da placa:
+            <select id="edit-marca" onchange="trocarMarcaEdicao(this.value)" style="margin-left:6px;padding:6px 10px;border:1.5px solid #d0d8e8;border-radius:8px;font-size:13px;">
+              <option value="">— sem marca —</option>
+              <option value="Trevo">Trevo</option>
+              <option value="Placo">Placo</option>
+              <option value="Knauf">Knauf</option>
+            </select>
+          </label>
+          <button class="btn-action" style="flex:0 0 auto;min-width:0;padding:7px 12px;" onclick="salvarComoNovo()">&#x1F4C4; Salvar como novo</button>
+          <button class="btn-action" style="flex:0 0 auto;min-width:0;padding:7px 12px;" onclick="sairEdicao()">&#x2716; Sair da edição</button>
+        </div>
+      </div>
       <div id="results-info" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;"></div>
 
       <div class="tbl-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
@@ -1370,11 +1413,30 @@ let currentResult=null, mostrarPrecosAtivo=false;
 
 function calcular(tipo) {
   let result=null,prefix='';
-  if(tipo==='parede')      {result=calcParede();      prefix='p';}
-  if(tipo==='estruturado') {result=calcEstruturado(); prefix='e';}
-  if(tipo==='aramado')     {result=calcAramado();     prefix='a';}
+  if(tipo==='parede')      prefix='p';
+  if(tipo==='estruturado') prefix='e';
+  if(tipo==='aramado')     prefix='a';
+  // Trava: a marca da placa precisa estar selecionada antes de calcular
+  var marcaEl=document.getElementById(prefix+'-marca');
+  var marca=marcaEl?marcaEl.value:'';
+  if(marcaEl && !marca){
+    marcaEl.style.borderColor='#e74c3c';
+    marcaEl.style.boxShadow='0 0 0 3px rgba(231,76,60,.25)';
+    marcaEl.scrollIntoView({behavior:'smooth',block:'center'});
+    alert('Selecione a MARCA DA PLACA (Trevo, Placo ou Knauf) antes de calcular.');
+    return;
+  }
+  if(marcaEl){ marcaEl.style.borderColor=''; marcaEl.style.boxShadow=''; }
+  if(tipo==='parede')      result=calcParede();
+  if(tipo==='estruturado') result=calcEstruturado();
+  if(tipo==='aramado')     result=calcAramado();
   if(!result){alert('Preencha todos os campos de dimensão antes de calcular.');return;}
+  // Coloca a marca no nome da placa (preço fixo e histórico passam a ser por marca)
+  if(marca) result.materiais.forEach(function(m){
+    if(m.key==='placas') m.nome=m.nome.replace('Placa de gesso','Placa de gesso '+marca);
+  });
   currentResult=result;
+  _esconderBannerEdicao();
   mostrarPrecosAtivo=mostrarPrecos[prefix];
   document.getElementById('results-info').innerHTML=result.info.map(i=>
     `<span class="info-badge">📐 <strong>${i.label}:</strong> ${i.value}</span>`).join('');
@@ -1959,6 +2021,7 @@ function renderHistorico() {
         '</div>'+
         '<div class="hist-actions">'+
           '<button class="btn-hist" onclick="toggleHistDetail('+e.id+',this)">&#x1F441; Ver</button>'+
+          '<button class="btn-hist" onclick="editarHistorico('+e.id+')" title="Editar este orçamento">&#x270F;&#xFE0F; Editar</button>'+
           btnToggle+
           '<button class="btn-hist" onclick="imprimirHistorico('+e.id+')">&#x1F5A8; Imprimir</button>'+
           '<button class="btn-hist" onclick="copiarHistorico('+e.id+')">&#x1F4CB; Copiar</button>'+
@@ -1987,6 +2050,111 @@ function toggleHistDetail(id, btn) {
   var open = el.style.display === 'none';
   el.style.display = open ? 'block' : 'none';
   btn.textContent = open ? '\u25B2 Fechar' : '\u{1F441} Ver';
+}
+
+// ── Edição de orçamento salvo (Opção A: edita a lista de materiais) ──
+var _MARCAS_RE = /^Placa de gesso( (Trevo|Placo|Knauf))?/;
+
+function _ptNum(s) {
+  if (s === undefined || s === null || s === '') return NaN;
+  return parseFloat(String(s).replace(/\./g, '').replace(',', '.'));
+}
+
+function _esconderBannerEdicao() {
+  var b = document.getElementById('edit-banner');
+  if (b) b.style.display = 'none';
+}
+
+function editarHistorico(id) {
+  try {
+    var hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    var entry = hist.find(function(e){ return e.id === id; });
+    if (!entry) return;
+
+    var mats = (entry.materiais || []).map(function(m) {
+      return { icon: '\u{1F4E6}', nome: m.nome, qty: m.qty, unit: m.unit };
+    });
+    var temPreco = (entry.materiais || []).some(function(m){ return m.price; });
+
+    currentResult = { titulo: entry.titulo, info: entry.info || [], materiais: mats };
+    currentHistId = entry.id;
+    mostrarPrecosAtivo = temPreco;
+
+    document.getElementById('results-info').innerHTML = currentResult.info.map(function(i){
+      return '<span class="info-badge">\u{1F4D0} <strong>'+i.label+':</strong> '+i.value+'</span>';
+    }).join('');
+    document.getElementById('results-title').textContent = '— ' + entry.titulo;
+    document.getElementById('col-preco').style.display    = temPreco ? '' : 'none';
+    document.getElementById('col-subtotal').style.display = temPreco ? '' : 'none';
+    renderTable(mats);
+    document.getElementById('total-box').style.display = temPreco ? 'flex' : 'none';
+
+    // Restaura preço e desconto de cada item salvo
+    entry.materiais.forEach(function(m, i) {
+      var pEl = document.getElementById('price-' + i);
+      if (pEl) { var p = _ptNum(m.price); pEl.value = isNaN(p) ? '' : p; }
+      var d = parseFloat(String(m.disc || '').replace('%', '').replace(',', '.'));
+      if (d > 0) {
+        var dBtn = document.getElementById('disc-btn-' + i);
+        var dEl  = document.getElementById('disc-' + i);
+        if (dBtn && dEl) { dBtn.classList.add('ativo'); dEl.style.display = ''; dEl.value = d; }
+      }
+    });
+
+    var cli = document.getElementById('ident-cliente');
+    if (cli) cli.value = entry.cliente || '';
+
+    // Banner de edição + marca atual da placa
+    var marca = '';
+    for (var k = 0; k < mats.length; k++) {
+      var mm = _MARCAS_RE.exec(mats[k].nome);
+      if (mm) { marca = mm[2] || ''; break; }
+    }
+    var sel = document.getElementById('edit-marca');
+    if (sel) sel.value = marca;
+    var t = document.getElementById('edit-banner-title');
+    if (t) t.textContent = '✏️ Editando orçamento' + (entry.cliente ? ' de ' + entry.cliente : '') + ' (' + entry.data + ')';
+    var b = document.getElementById('edit-banner');
+    if (b) b.style.display = 'block';
+
+    atualizarTotal();
+    var rc = document.getElementById('results-card');
+    rc.classList.add('visible');
+    rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch(e) { alert('Erro ao abrir para edição: ' + e); }
+}
+
+function trocarMarcaEdicao(marca) {
+  if (!currentResult) return;
+  currentResult.materiais.forEach(function(m, i) {
+    if (!_MARCAS_RE.test(m.nome)) return;
+    m.nome = m.nome.replace(_MARCAS_RE, 'Placa de gesso' + (marca ? ' ' + marca : ''));
+    var tr = document.getElementById('row-' + i);
+    if (tr && tr.children[1]) tr.children[1].innerHTML = '<span class="mat-icon">' + m.icon + '</span>' + m.nome;
+    // Preço fixado da nova marca (se houver); senão limpa para o vendedor informar
+    var pEl = document.getElementById('price-' + i);
+    var saved = _getPrecoFixo(m.nome);
+    if (pEl) pEl.value = (saved !== null) ? saved : '';
+    var pin = document.getElementById('pin-' + i);
+    if (pin) pin.classList.toggle('ativo', saved !== null);
+  });
+  atualizarTotal();
+}
+
+function salvarComoNovo() {
+  if (!currentResult) return;
+  currentHistId = null;     // força a criação de um novo registro
+  salvarAgora();
+  var t = document.getElementById('edit-banner-title');
+  if (t) t.textContent = '✅ Salvo como novo orçamento — você está editando a nova cópia';
+}
+
+function sairEdicao() {
+  // Sai sem salvar (as alterações não salvas são descartadas)
+  _esconderBannerEdicao();
+  currentHistId = null;
+  document.getElementById('results-card').classList.remove('visible');
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function imprimirAtual() {
@@ -2078,7 +2246,12 @@ var _CSS_ORCAMENTO =
   +'#_pdf-doc .footer{margin-top:12px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:6px;}';
 // ────────────────────────────────────────────────────────────────────────────
 
+var _imprimindoAgora = false;
 function imprimirHistorico(id) {
+  // Trava: ignora cliques repetidos enquanto a impressão anterior está em andamento
+  if (_imprimindoAgora) return;
+  _imprimindoAgora = true;
+  setTimeout(function(){ _imprimindoAgora = false; }, 4000);
   try {
     var hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
     var entry = hist.find(function(e){ return e.id===id; });
@@ -2107,8 +2280,15 @@ function imprimirHistorico(id) {
     if (w && w.document) {
       w.document.write(html);
       w.document.close();
-      w.onload = function(){ setTimeout(function(){ w.print(); }, 300); };
-      setTimeout(function(){ try{ w.print(); }catch(e){} }, 600);
+      // UM único disparo de impressão (antes havia onload + setTimeout = 2 impressões)
+      var _jaImprimiu = false;
+      var _imprimirUmaVez = function(){
+        if (_jaImprimiu) return;
+        _jaImprimiu = true;
+        try { w.focus(); w.print(); } catch(e) {}
+      };
+      if (w.document.readyState === 'complete') { setTimeout(_imprimirUmaVez, 300); }
+      else { w.onload = function(){ setTimeout(_imprimirUmaVez, 300); }; setTimeout(_imprimirUmaVez, 1500); }
     } else {
       // Fallback: iframe oculto na mesma página
       var old = document.getElementById('_ss-print-frame');
@@ -2531,6 +2711,7 @@ function limparHistorico() {
 function novoCalculo(){
   salvarAgora();
   currentHistId = null;
+  _esconderBannerEdicao();
   document.getElementById('results-card').classList.remove('visible');
   window.scrollTo({top:0,behavior:'smooth'});
 }
